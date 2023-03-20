@@ -5,7 +5,7 @@ import pandas as pd
 from Bio.Blast import NCBIWWW
 from Bio.Blast import NCBIXML
 from Bio import SeqIO
-import matplotlib as plt
+import matplotlib.pyplot as plt
 
 
 
@@ -45,6 +45,19 @@ def get_homologs(ens_id):
 
     return df
 
+def findOrfs(sequence):
+    '''Function to take a DNA sequence and return a list of all the ORFs sorted from longest to shortest.'''
+    def revcomp(sequence):
+        '''reverse compliment dna'''
+        compl_trans = str.maketrans("ATGC", "TACG")  # create the complimentary tranlsation
+        #seq = seq.translate(compl_trans)
+        return sequence[::-1].translate(compl_trans)
+    pattern = re.compile(r'(?=(ATG(?:...)*?)(?=TAG|TGA|TAA))') #regex pattern for orfs
+    orfs = list(set(pattern.findall(sequence) + pattern.findall(revcomp(sequence)))) #find orfs by regex, then set to remove duplicates, save as list 
+    orfs.sort(key=len) #sort shortest to longest
+    print(f'Found {len(orfs)} ORFs. Shortest : {len(orfs[0])} Longest : {len(orfs[-1])}')
+    return orfs[::-1] #return reversed to deliver longest to shortest
+
 def generate_blastp_df(sequence,eval_thresh=0.00000000001 ):
     '''Run BLAST on query and generate dataframe'''
     columns = ['Title','Hit ID','Hit Def','Length','Score','Bits','Expect','Num Alignments','Identities','Positives','Gaps','Align Length','Strand','Frame','Query','Query Start','Query End','Match','Subject','Subject Start','Subject End']
@@ -74,7 +87,6 @@ def generate_blastp_df(sequence,eval_thresh=0.00000000001 ):
                 
     print(f"There are {count} similar sequences in Blast output")
     blast_df = pd.DataFrame(rows,columns=columns)
-    blast_df.to_csv('blast_results.csv')
 
     return blast_df
 
@@ -83,22 +95,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--aa_sequence", help="aa sequence of protein", type=str)
     parser.add_argument("--fasta",help="FASTA file of aa sequence of interest",type=str) #will read the last FASTA ENTRY
-    parser.add_argument("--gene",help="geneID of sequence of interest",type=str)
+    #parser.add_argument("--gene",help="geneID of sequence of interest",type=str)
+    #parser.add_argument("--species",help="the species of the assigned gene",type=str, default='mouse')
+
     args = parser.parse_args()
 
     fasta = args.fasta
     aa_sequence = args.aa_sequence
-    gene = args.gene
+    #gene = args.gene
+    #species = args.species
 
 
     if fasta:
         print(f'Reading {fasta} ...')
-
-        # with open(fasta,'r') as fasta_file:
-        #     #fasta_file.read()
-        #     aa_sequence = fasta_file.read()
-        # print(f'Obtained {aa_sequence} from {fasta}...')
-
         for seq_record in SeqIO.parse(fasta,"fasta"):
             aa_sequence = seq_record.seq
         print(f'Obtained {aa_sequence} from {fasta}...')
@@ -106,9 +115,20 @@ def main():
     elif aa_sequence:
         pass
 
-    elif gene:
-        #TODO : OBTAIN PROTEIN SEQ FROM GENE
-        pass
+    # elif gene:
+    #     ens_id = get_ENS_gene_id(gene,species=species)
+
+    #     #Query Ensembl and write to FASTA
+    #     json_header = {'Content-Type': 'application/json'}
+    #     ensembl_server = 'http://rest.ensembl.org'
+    #     endpoint = f'/sequence/id/{ens_id}?context-type=text/plain'
+    #     r = requests.get(ensembl_server+endpoint, headers = json_header)
+    #     r = r.json()
+
+    #     orf = findOrfs(r['seq'])[0] #get longest orf
+    #     seq = Seq(orf)
+    #     aa_sequence = str(seq.translate())
+
         
     ####### BLASTP SEARCH. EXPORT AS CSV.
 
@@ -122,7 +142,7 @@ def main():
     ##### BIN HOMOLOG SEQUENCES. PLOT.
     '''How many species within each bin? '''
 
-    bins = [50.0, 60.0, 70.0, 80, 90]
+    bins = [50.0, 60.0, 70.0, 80, 90] 
 
     blast_df_50_60 = blast_df.loc[ blast_df['%Identity'] >= 50].loc[ blast_df['%Identity'] <60 ]
     blast_df_60_70 = blast_df.loc[ blast_df['%Identity'] >= 60].loc[ blast_df['%Identity'] <70 ]
@@ -145,20 +165,35 @@ def main():
     ax1.set_xlim(42,100)
     ax1.set_title('% Identity')
 
-    #TODO : CORRECT BAR PLOT BINNING ON XAXIS 
     # Unique genuses bar plot
     ax2.bar(bins,unique_genus_counts,width=10,color='mediumslateblue')
     ax2.set_title('Unique Genuses')
-
 
     # Unique species bar plot
     ax3.bar(bins,unique_species_counts,width=10,color='royalblue')
     ax3.set_title('Unique Species')
 
     fig.supxlabel("Percent Identity Bins")
+    fig.savefig("Blast Summary.png",dpi=200)
 
     #### RANDOMLY GRAB 96x OF VARYING %identity. RETURN CSV
+    blast_df.to_csv('blast_results.csv')
 
+    samples = []
+    for binned_df in binned_dfs: 
+        
+        if len(list(binned_df.index)) < 19:
+            samples.append(binned_df)
+            
+        else:
+            samples.append(binned_df.sample(19,replace=False))
+
+
+    simple_cols = ['Title','%Identity','Scientific Name','Subject']
+    export_df = pd.concat(samples)[ simple_cols ]
+    final_df = pd.concat([export_df,pd.DataFrame({'Title':['Query'], '%Identity': [100], 'Scientific Name': ['Query'], 'Subject': [aa_sequence]})]).reset_index(drop=True)
+
+    final_df.to_csv('96-well-homologs.csv')
 
 
 if __name__=="__main__":
