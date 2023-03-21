@@ -1,0 +1,23 @@
+Script for RBIF-109 Assignment 4 : Homolog Finder
+
+Script will accept a peptide sequence either in the form of a string or FASTA file and conduct a BLASTP search to 
+gather multiple sequence homologs. Homologs will be binned by percent similarity and 96 homologs across all bins will 
+be chosen and exported to a ready-to-order csv.
+
+Expected Usage:
+
+python3 homolog_finder.py --fasta tdt.fasta
+
+Expected Inputs ( Only 1 required):
+--fasta : path to a fasta file containing amino acid sequence
+--aa_sequence  : string of amino acid sequence 
+
+Expected Outputs:
+
+1) 96-well-homologs.csv - CSV assortment of 96-homologs 
+
+2) blast_alignments.txt - TXT file  containing the formatted alignments from the BLASTP query
+
+3) blast_results.csv - CSV file containing the analyzed BLASTP records
+
+4) blast_summary.png - PNG Plots describing the spread of percent similarity of homologs obtained
